@@ -209,6 +209,10 @@ thrust::host_vector<cufftComplex> Tensor_calc(const int& grid_dimX, const int& g
     return flat_host_grid;
 }
 
+inline __host__ __device__ cufftComplex operator*(cufftComplex a, cufftComplex b) {
+    
+}
+
 thrust::host_vector<cufftComplex> F_grid_maker(const int& grid_dimX, const int& grid_dimY, const int& grid_dimZ, const float& deltaX, const float& deltaY, const float& deltaZ) {
     const int ext_dimX = 2 * grid_dimX;
     const int ext_dimY = 2 * grid_dimY;
@@ -245,6 +249,8 @@ thrust::host_vector<cufftComplex> F_grid_maker(const int& grid_dimX, const int& 
     if (error_value != CUFFT_SUCCESS) {
         fprintf(stderr, "CUFFT error: Plan creation failed -- F_grid_maker()");
     }
+    
+    checkCudaErrors(cudaDeviceSynchronize());
 
     flat_host_grid = device_grid;
 
@@ -312,8 +318,40 @@ void TEST_F_grid_maker() {
 
 //-------------------------------------------------------------------- EXCHANGE FIELD
 
-__global__ void exch_field_calc(float* exch_field, int grid_dimX, int grid_dimY, int grid_dimZ, float deltaX, float deltaY, float deltaZ) {
+inline __host__ __device__ float3 operator-(float3 a, float3 b) {
+    return make_float3(a.x-b.x, a.y - b.y, a.z - b.z);
+}
+inline __host__ __device__ float3 operator*(float mul, float3 a) {
+    return make_float3(mul*a.x, mul*a.y, mul*a.z);
+}
 
+extern "C"
+__global__ void exch_field_calc(float3* exch_field, float3* mag_grid, int grid_dimX, int grid_dimY, int grid_dimZ, float deltaX, float deltaY, float deltaZ) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+    
+    int a = grid_dimY;
+    int b = grid_dimX;
+    
+    float3 curr_value = mag_grid[k*a*b+j*b+i];
+    
+    float3 res = make_float3(0.0, 0.0, 0.0);  exch_field[k*a*b + j*b + i] 
+    
+    if(i < grid_dimX && j < grid_dimY && k < grid_dimZ) {
+        res = res + mag_grid[k*a*b+j*b+i+1]*((i+1) < b);
+        res = res + mag_grid[k*a*b+j*b+i-1]*((i-1) > -1);
+        
+        res = res + mag_grid[k*a*b+(j+1)*b+i]*((j+1) < a);
+        res = res + mag_grid[k*a*b+(j-1)*b+i]*((j-1) > -1);
+        
+        res = res + mag_grid[(k+1)*a*b+j*b+i]*((k+1) < grid_dimZ);
+        res = res + mag_grid[(k-1)*a*b+j*b+i]*((k-1) > -1);
+        
+        res = res - 6f*curr_value;
+        
+        exch_field[k*a*b+j*b+i] = res;
+    }
 }
 
 
@@ -333,14 +371,22 @@ int main() {
 
     //--------------- EXCHANGE FIELD
 
-    thrust::host_vector<float> mag_grid(grid_dimZ * grid_dimX * grid_dimY*VECDIM);
+    thrust::host_vector<float3> mag_grid(2*grid_dimZ * 2*grid_dimX * 2*grid_dimY);
 
-    thrust::device_vector<float> exch_field(grid_dimZ * grid_dimX * grid_dimY * VECDIM);
+    thrust::device_vector<float3> exch_field(grid_dimZ * grid_dimX * grid_dimY);
+    
+    dim3 gridsize(32, 32);
+    dim3 blocksize((grid_dimX + 31) / 32, (grid_dimY + 31) / 32, grid_dimZ);
+    
+    //exch_field_calc<<<blocksize, gridsize>>>(thrust::raw_pointer_cast(exch_field.data()), thrust::raw_pointer_cast(exch_field.data()), 
+    //                                                                          grid_dimX, grid_dimY, grid_dimZ, deltaX, deltaY, deltaZ);
+                                                    
+    
 
     //cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
     //cudaArray_t cuArray;
     ////cudaMallocArray(&cuArray, &channelDesc, width, height);
-    cudaTextureObject_t tex_ref;
+    //cudaTextureObject_t tex_ref;
 
 
     
