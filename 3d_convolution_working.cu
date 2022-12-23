@@ -26,6 +26,11 @@
 #define CELLSIZE 6
 #define VECDIM 3 
 
+static __device__ __host__ inline cufftComplex operator+(cufftComplex, cufftComplex);
+static __device__ __host__ inline cufftComplex operator*(cufftComplex, float);
+static __device__ __host__ inline cufftComplex operator*(cufftComplex, cufftComplex);
+
+static __global__ void Convolution_calc(cufftComplex*, cufftComplex* );
 
 int main() {
     grid_dimX = 4096;
@@ -87,4 +92,31 @@ int main() {
     printf("\n GPU calculation time %f msec\n", timerValueGPU);
 
     return 0;
+}
+////////////////////////////////////////////////////////////////////////////////
+// Complex operations
+////////////////////////////////////////////////////////////////////////////////
+
+// Complex addition
+static __device__ __host__ inline cufftComplex operator+(cufftComplex a, cufftComplex b) {
+    cufftComplex c;
+    c.x = a.x + b.x;
+    c.y = a.y + b.y;
+    return c;
+}
+
+// Complex scale
+static __device__ __host__ inline cufftComplex operator*(cufftComplex a, float s) {
+    cufftComplex c;
+    c.x = s * a.x;
+    c.y = s * a.y;
+    return c;
+}
+
+// Complex multiplication
+static __device__ __host__ inline cufftComplex operator*(cufftComplex a, cufftComplex b) {
+    cufftComplex c;
+    c.x = a.x * b.x - a.y * b.y;
+    c.y = a.x * b.y + a.y * b.x;
+    return c;
 }
