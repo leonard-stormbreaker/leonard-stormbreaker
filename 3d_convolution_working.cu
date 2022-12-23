@@ -74,7 +74,6 @@ int main() {
 
 
     thrust::device_vector<cufftComplex> input_device_grid = host_grid;
-    thrust::device_vector<cufftComplex> output_device_grid(FULLSIZE);
 
     cufftHandle plan_adv;
     size_t workSize;
